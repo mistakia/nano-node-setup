@@ -1,0 +1,12 @@
+[Unit]
+Description=Nano Prom service
+After=nano.service
+
+[Service]
+User=root
+ExecStart=/usr/local/bin/nano-prom --config /root/nano-prom-config.ini
+# Restart=always
+# RestartSec=1
+
+[Install]
+WantedBy=multi-user.target
