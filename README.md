@@ -6,7 +6,7 @@ Install [Docker](https://docs.docker.com/engine/install/ubuntu/)
 Install and run prom gateway
 ```
 docker pull prom/pushgateway
-docker run -d -p 9091:9091 prom/pushgateway —name push-gateway
+docker run -d -p 9091:9091 --name push-gateway prom/pushgateway
 ```
 Install and run prometheus
 ```
@@ -36,6 +36,14 @@ Install Nano Prom Exporter
 ```
 apt install python3-pip
 pip3 install nano-prom-exporter
+```
+Install Loki
+```
+curl -O -L "https://github.com/grafana/loki/releases/download/v2.4.2/loki-linux-amd64.zip"
+unzip "loki-linux-amd64.zip"
+chmod a+x "loki-linux-amd64"
+mv loki-linux-amd64 /usr/local/bin/
+rm loki-linux-amd64.zip
 ```
 Install [Grafana](https://grafana.com/docs/grafana/latest/installation/debian/)
 
