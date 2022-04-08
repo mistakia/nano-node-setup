@@ -1,0 +1,12 @@
+[Unit]
+Description=Nano Work Server
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+User=user
+ExecStart=/usr/local/bin/nano-work-server --gpu 0:0 --listen-address [::0]:7077
+Restart=always
+
+[Install]
+WantedBy=multi-user.target
