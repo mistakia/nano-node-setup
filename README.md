@@ -47,6 +47,14 @@ rm loki-linux-amd64.zip
 ```
 Install [Grafana](https://grafana.com/docs/grafana/latest/installation/debian/)
 
+Install Promtail
+```
+curl -O -L "https://github.com/grafana/loki/releases/download/v2.4.2/promtail-linux-amd64.zip"
+unzip promtail-linux-amd64.zip
+chmod a+x promtail-linux-amd64
+mv promtail-linux-amd64 /usr/local/bin/
+```
+
 # Troubleshooting
 
 ## Enable ipv6
