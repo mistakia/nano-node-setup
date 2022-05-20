@@ -57,6 +57,23 @@ curl -O -L "https://github.com/grafana/loki/releases/download/v2.5.0/promtail-li
 unzip promtail-linux-amd64.zip
 chmod a+x promtail-linux-amd64
 mv promtail-linux-amd64 /usr/local/bin/
+rm promtail-linux-amd64.zip
+```
+Download system services
+```
+cd /etc/systemd/system
+sudo wget https://raw.githubusercontent.com/mistakia/nano-node-setup/main/services/loki.service
+sudo wget https://raw.githubusercontent.com/mistakia/nano-node-setup/main/services/promtail.service
+sudo wget https://raw.githubusercontent.com/mistakia/nano-node-setup/main/services/nano-prom.service
+sudo wget https://raw.githubusercontent.com/mistakia/nano-node-setup/main/services/nano-export.service
+```
+Start Services
+```
+sudo systemctl daemon-reload
+sudo systemctl start loki.service
+sudo systemctl start promtail.service
+sudo systemctl start nano-prom.service
+sudo systemctl start nano-export.service
 ```
 
 # Troubleshooting

@@ -4,9 +4,10 @@ After=nano.service
 
 [Service]
 User=root
-ExecStart=/usr/local/bin/nano-prom --config /root/nano-prom-config.ini
-# Restart=always
-# RestartSec=1
+ExecStart=/usr/bin/python3 -m nano_prom_exporter --config_path /path/to/config.ini
+Environment=PYTHONUNBUFFERED=1
+Restart=on-failure
+RestartSec=5
 
 [Install]
 WantedBy=multi-user.target
