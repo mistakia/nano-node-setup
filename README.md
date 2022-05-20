@@ -41,9 +41,9 @@ Install Nano Prom Exporter
 apt install python3-pip
 pip3 install nano-prom-exporter
 ```
-Install Loki
+Install [Loki](https://github.com/grafana/loki/releases/)
 ```
-curl -O -L "https://github.com/grafana/loki/releases/download/v2.4.2/loki-linux-amd64.zip"
+curl -O -L "https://github.com/grafana/loki/releases/download/v2.5.0/loki-linux-amd64.zip"
 unzip "loki-linux-amd64.zip"
 chmod a+x "loki-linux-amd64"
 mv loki-linux-amd64 /usr/local/bin/
