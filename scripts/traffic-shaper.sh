@@ -39,20 +39,27 @@ function update_ipset {
 
 function whitelist {
     install_ipset
+    clear_iptables
 
     # Allow connections from IP set
     $IPTABLES -I INPUT -p tcp --dport $PORT -m set --match-set half-prs src -j ACCEPT
+    $IPTABLES -I INPUT -p tcp --sport $PORT -m set --match-set half-prs src -j ACCEPT
 
     # Allow connection to IP set
     $IPTABLES -I OUTPUT -p tcp --dport $PORT -m set --match-set half-prs dst -j ACCEPT
+    $IPTABLES -I OUTPUT -p tcp --sport $PORT -m set --match-set half-prs dst -j ACCEPT
 
     # Deny other incoming connections
-    $IPTABLES -A INPUT -p tcp --dport $PORT -j REJECT
-    $IPTABLES -A INPUT -p tcp --sport $PORT -j REJECT
+    $IPTABLES -A INPUT -p tcp --dport $PORT -m limit --limit 10/s -j ACCEPT
+    $IPTABLES -A INPUT -p tcp --sport $PORT -m limit --limit 10/s -j ACCEPT
+    $IPTABLES -A INPUT -p tcp --dport $PORT -j DROP
+    $IPTABLES -A INPUT -p tcp --sport $PORT -j DROP
 
     # Deny other outgoing conenctions
-    $IPTABLES -A OUTPUT -p tcp --dport $PORT -j REJECT
-    $IPTABLES -A OUTPUT -p tcp --sport $PORT -j REJECT
+    $IPTABLES -A OUTPUT -p tcp --dport $PORT -m limit --limit 10/s -j ACCEPT
+    $IPTABLES -A OUTPUT -p tcp --sport $PORT -m limit --limit 10/s -j ACCEPT
+    $IPTABLES -A OUTPUT -p tcp --dport $PORT -j DROP
+    $IPTABLES -A OUTPUT -p tcp --sport $PORT -j DROP
 }
 
 function install_ipset {
@@ -95,38 +102,59 @@ function tc_ingress {
     $TC filter add dev $IF parent ffff: protocol ip u32 match u32 0 0 action mirred egress redirect dev $IF_INGRESS
 
     # create root qdisc for ingress on the IFB device
-    $TC qdisc add dev $IF_INGRESS root handle 1:0 htb
+    $TC qdisc add dev $IF_INGRESS root handle 1:0 htb default 10
 
-    # create parent class for egress
+    # create parent class for ingress
     $TC class add dev $IF_INGRESS parent 1: classid 1:1 htb rate $MAX
 
-    # ceate class to rate limit non half PR ingress traffic
-    $TC class add dev $IF_INGRESS parent 1:1 classid 1:10 htb rate $RATE ceil $CEIL
+    # create class for default high priority ingress traffic
+    $TC class add dev $IF_INGRESS parent 1:1 classid 1:10 htb rate $MAX
+    # create class for high priority half PR ingress traffic
+    $TC class add dev $IF_INGRESS parent 1:1 classid 1:30 htb rate $MAX
+    # create class for low priority ingress traffic
+    $TC class add dev $IF_INGRESS parent 1:1 classid 1:50 htb rate $RATE ceil $CEIL
 
-    # filter packets marked with handle <x> and send to classid
-    $TC filter add dev $IF_INGRESS parent 1:0 prio 1 handle 4 fw classid 1:10
+    # filter high priority packets matching dns ips and send to classid 1:30
+    dig "$DNS_HOSTNAME" A +short | while read ip; do
+        $TC filter add dev $IF_INGRESS parent 1:0 protocol ip prio 1 u32 match ip src $ip classid 1:30
+    done
 
-    # limit incoming traffic to and from port 7075 but not when its to a half-pr, mark traffic with handle <x>
-    $IPTABLES -t mangle -A INPUT -i $IF_INGRESS -p tcp --dport $PORT -m set ! --match-set half-prs src -j MARK --set-mark 4
-    $IPTABLES -t mangle -A INPUT -i $IF_INGRESS -p tcp --sport $PORT -m set ! --match-set half-prs src -j MARK --set-mark 4
+    # filter low priority packets matching port send to classid 1:50
+    $TC filter add dev $IF_INGRESS parent 1:0 protocol ip prio 2 u32 match ip dport $PORT 0xffff classid 1:50
+    $TC filter add dev $IF_INGRESS parent 1:0 protocol ip prio 2 u32 match ip sport $PORT 0xffff classid 1:50
 }
 
 function tc_egress {
-    # create root qdisc for egress
-    $TC qdisc add dev $IF root handle 1:0 htb
+    # create root qdisc for egress, default use low priority class 20
+    $TC qdisc add dev $IF root handle 1:0 htb default 10
 
     # create parent class for egress
     $TC class add dev $IF parent 1: classid 1:1 htb rate $MAX
 
-    # create class to rate limit non half PR egress traffic
-    $TC class add dev $IF parent 1:1 classid 1:10 htb rate $RATE ceil $CEIL
+    # create class for high priority half PR traffic
+    $TC class add dev $IF parent 1:1 classid 1:10 htb rate $MAX
+    # create class for high priority half PR traffic
+    $TC class add dev $IF parent 1:1 classid 1:20 htb rate $MAX
+    # create class for low priority egress traffic
+    $TC class add dev $IF parent 1:1 classid 1:40 htb rate $RATE ceil $CEIL
 
-    # filter packets marked with handle <x> and send to classid
-    $TC filter add dev $IF parent 1:0 prio 1 handle 2 fw classid 1:10
+    # filter packets marked with handle 2 and send to classid 1:20
+    $TC filter add dev $IF parent 1:0 prio 1 handle 2 fw classid 1:20
 
-    # limit outgoing traffic to and from port 7075 but not when its to a half-pr, mark traffic with handle <x>
-    $IPTABLES -t mangle -A OUTPUT -p tcp --sport $PORT -m set ! --match-set half-prs dst -j MARK --set-mark 2
-    $IPTABLES -t mangle -A OUTPUT -p tcp --dport $PORT -m set ! --match-set half-prs dst -j MARK --set-mark 2
+    # filter packets matching port and send to classid 1:20
+    $TC filter add dev $IF parent 1:0 protocol ip prio 2 u32 match ip dport $PORT 0xffff classid 1:40
+    $TC filter add dev $IF parent 1:0 protocol ip prio 2 u32 match ip sport $PORT 0xffff classid 1:40
+    # $TC filter add dev $IF parent 1:0 prio 2 handle 4 fw classid 1:40
+
+    # mark low priority traffic to a half-pr with handle 4 for deprioritization
+    # $IPTABLES -t mangle -A OUTPUT -p tcp --dport $PORT -j MARK --set-mark 4
+    # $IPTABLES -t mangle -A OUTPUT -p tcp --sport $PORT -j MARK --set-mark 4
+
+    # mark high priority traffic to a half-pr with handle 2 for prioritization
+    $IPTABLES -t mangle -A OUTPUT -p tcp --sport $PORT -m set --match-set half-prs src -j MARK --set-mark 2
+    $IPTABLES -t mangle -A OUTPUT -p tcp --sport $PORT -m set --match-set half-prs dst -j MARK --set-mark 2
+    $IPTABLES -t mangle -A OUTPUT -p tcp --dport $PORT -m set --match-set half-prs src -j MARK --set-mark 2
+    $IPTABLES -t mangle -A OUTPUT -p tcp --dport $PORT -m set --match-set half-prs dst -j MARK --set-mark 2
 }
 
 function shape {
@@ -137,18 +165,6 @@ function shape {
 
     tc_ingress
     tc_egress
-
-    # create iptables mangle table
-    # $IPTABLES -t mangle -N shaper-in
-    # $IPTABLES -t mangle -N shaper-out
-
-    # $IPTABLES -t mangle -I PREROUTING -i $IF -j shaper-in
-    # $IPTABLES -t mangle -I POSTROUTING -o $IF -j shaper-out
-
-    # shape traffic not included in ipset
-    # $IPTABLES -t mangle -A shaper-in -p tcp --dport $PORT -m set ! --match-set half-prs src -j MARK --set-mark 2
-    # $IPTABLES -t mangle -A shaper-out -p tcp --dport $PORT -m set ! --match-set half-prs dst -j MARK --set-mark 2
-
 }
 
 function uninstall {
@@ -156,7 +172,7 @@ function uninstall {
     clear_tc
 
     # destroy ipset
-    $IPSET destroy half-prs
+    $IPSET destroy half-prs >/dev/null 2>&1
 }
 
 case "${1:-x}" in
