@@ -73,9 +73,9 @@ function create_ipset {
 
 function clear_tc {
     # Clear queuing disciplines (qdisc) on the interfaces
-    $TC qdisc del dev $IF root >/dev/null 2>&1
-    $TC qdisc del dev $IF ingress >/dev/null 2>&1
-    $TC qdisc del dev $IF_INGRESS root >/dev/null 2>&1
+    $TC qdisc del dev $IF root > /dev/null 2>&1
+    $TC qdisc del dev $IF ingress > /dev/null 2>&1
+    $TC qdisc del dev $IF_INGRESS root > /dev/null 2>&1
 }
 
 function clear_iptables {
@@ -143,7 +143,6 @@ function tc_egress {
     $TC filter add dev $IF parent 1:0 protocol ip prio 2 u32 match ip sport $PORT 0xffff classid 1:40
 
     # mark high priority traffic in the half-pr ipset with handle 2 for prioritization
-    $IPTABLES -t mangle -A OUTPUT -p tcp -m set --match-set half-prs src -j MARK --set-mark 2
     $IPTABLES -t mangle -A OUTPUT -p tcp -m set --match-set half-prs dst -j MARK --set-mark 2
 }
 
@@ -162,7 +161,7 @@ function uninstall {
     clear_tc
 
     # destroy ipset
-    $IPSET destroy half-prs >/dev/null 2>&1
+    $IPSET destroy half-prs > /dev/null 2>&1
 }
 
 case "${1:-x}" in
