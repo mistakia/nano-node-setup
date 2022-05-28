@@ -40,7 +40,7 @@ function update_ipset {
 }
 
 function whitelist {
-    install_ipset
+    create_ipset
     clear_iptables
 
     # Allow connections from ipset
@@ -64,7 +64,7 @@ function whitelist {
     $IPTABLES -A OUTPUT -p tcp --sport $PORT -j DROP
 }
 
-function install_ipset {
+function create_ipset {
     # Create IP Set
     $IPSET create half-prs hash:ip --exist # family inet6
 
@@ -72,7 +72,7 @@ function install_ipset {
 }
 
 function clear_tc {
-    # Clear old queuing disciplines (qdisc) on the interfaces
+    # Clear queuing disciplines (qdisc) on the interfaces
     $TC qdisc del dev $IF root >/dev/null 2>&1
     $TC qdisc del dev $IF ingress >/dev/null 2>&1
     $TC qdisc del dev $IF_INGRESS root >/dev/null 2>&1
@@ -82,10 +82,6 @@ function clear_iptables {
     # flush iptables mangle table
     $IPTABLES -F INPUT
     $IPTABLES -F OUTPUT
-    $IPTABLES -t mangle -F shaper-out
-    $IPTABLES -t mangle -F shaper-in
-    $IPTABLES -t mangle -F PREROUTING
-    $IPTABLES -t mangle -F POSTROUTING
     $IPTABLES -t mangle -F INPUT
     $IPTABLES -t mangle -F OUTPUT
 }
@@ -154,7 +150,7 @@ function tc_egress {
 }
 
 function shape {
-    install_ipset
+    create_ipset
 
     clear_tc
     clear_iptables
@@ -175,8 +171,6 @@ case "${1:-x}" in
     whitelist) whitelist ;;
     update) update_ipset ;;
     shape) shape ;;
-    shape_ingress) tc_ingress ;;
-    shape_egress) tc_egress ;;
     uninstall) uninstall ;;
     *)
         echo  >&2 "usage:"
