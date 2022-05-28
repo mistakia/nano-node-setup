@@ -26,7 +26,7 @@ TC=/sbin/tc
 # To restore using our example we would run "/sbin/iptables-restore < /usr/local/etc/iptables.last"
 $IPTABLES_SAVE > /usr/local/etc/iptables.last
 
-function update {
+function update_ipset {
     # Flush old IPs
     $IPSET flush half-prs
 
@@ -38,7 +38,7 @@ function update {
 }
 
 function whitelist {
-    install
+    install_ipset
 
     # Allow connections from IP set
     $IPTABLES -I INPUT -p tcp --dport $PORT -m set --match-set half-prs src -j ACCEPT
@@ -55,11 +55,11 @@ function whitelist {
     $IPTABLES -A OUTPUT -p tcp --sport $PORT -j REJECT
 }
 
-function install {
+function install_ipset {
     # Create IP Set
     $IPSET create half-prs hash:ip --exist # family inet6
 
-    update
+    update_ipset
 }
 
 function clear_tc {
@@ -82,7 +82,7 @@ function clear_iptables {
     $IPTABLES -t mangle -F OUTPUT
 }
 
-function shape_ingress {
+function tc_ingress {
     # if the interace is not up bad things happen
     # ifconfig $IF_INGRESS up
     modprobe ifb numifbs=1
@@ -111,7 +111,7 @@ function shape_ingress {
     $IPTABLES -t mangle -A INPUT -i $IF_INGRESS -p tcp --sport $PORT -m set ! --match-set half-prs src -j MARK --set-mark 4
 }
 
-function shape_egress {
+function tc_egress {
     # create root qdisc for egress
     $TC qdisc add dev $IF root handle 1:0 htb
 
@@ -130,13 +130,13 @@ function shape_egress {
 }
 
 function shape {
-    install
+    install_ipset
 
     clear_tc
     clear_iptables
 
-    shape_ingress
-    shape_egress
+    tc_ingress
+    tc_egress
 
     # create iptables mangle table
     # $IPTABLES -t mangle -N shaper-in
@@ -161,10 +161,10 @@ function uninstall {
 
 case "${1:-x}" in
     whitelist) whitelist ;;
-    update) update ;;
+    update) update_ipset ;;
     shape) shape ;;
-    shape_ingress) shape_ingress ;;
-    shape_egress) shape_egress ;;
+    shape_ingress) tc_ingress ;;
+    shape_egress) tc_egress ;;
     uninstall) uninstall ;;
     *)
         echo  >&2 "usage:"
