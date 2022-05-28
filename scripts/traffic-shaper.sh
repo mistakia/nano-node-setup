@@ -9,6 +9,7 @@ CEIL=2kbps
 
 # Interface to shape
 IF=eth0
+IF_INGRESS=ifb0
 
 # Specify where iptables is located
 IPTABLES=/sbin/iptables
@@ -36,6 +37,8 @@ function update {
 }
 
 function whitelist {
+    install
+
     # Allow connections from IP set
     $IPTABLES -I INPUT -p tcp --dport $PORT -m set --match-set half-prs src -j ACCEPT
 
@@ -53,20 +56,20 @@ function whitelist {
 
 function install {
     # Create IP Set
-    $IPSET create half-prs hash:ip # family inet6
+    $IPSET create half-prs hash:ip --exist # family inet6
 
     update
 }
 
-function shape {
-    # create root qdisc
-    $TC qdisc add dev $IF root handle 1:0 htb
+function clear_tc {
+    # Clear old queuing disciplines (qdisc) on the interfaces
+    $TC qdisc del dev $IF root
+    $TC qdisc del dev $IF ingress
+    $TC qdisc del dev $IF_INGRESS root
+    # $TC qdisc del dev $IF_INGRESS ingress
+}
 
-    # create class to rate limit non half PR traffic
-    $TC class add dev $IF parent 1: classid 1:1 htb rate $RATE ceil $CEIL
-    $TC class add dev $IF parent 1:1 classid 1:10 htb rate $RATE ceil $CEIL
-    $TC filter add dev $IF parent 1:0 prio 1 handle 2 fw classid 1:10
-
+function clear_iptables {
     # flush iptables mangle table
     $IPTABLES -F INPUT
     $IPTABLES -t mangle -F shaper-out
@@ -75,6 +78,63 @@ function shape {
     $IPTABLES -t mangle -F POSTROUTING
     $IPTABLES -t mangle -F INPUT
     $IPTABLES -t mangle -F OUTPUT
+}
+
+function shape_ingress {
+    # if the interace is not up bad things happen
+    # ifconfig $IF_INGRESS up
+    modprobe ifb numifbs=1
+    ip link set dev $IF_INGRESS up
+
+    # create ingress on external interface
+    $TC qdisc add dev $IF handle ffff: ingress
+
+    # create root qdisc for ingress on the IFB device
+    $TC qdisc add dev $IF_INGRESS root handle 1:0 htb
+
+    # create parent class for egress
+    $TC class add dev $IF_INGRESS parent 1: classid 1:1 htb rate $RATE ceil $CEIL
+
+    # ceate class to rate limit non half PR ingress traffic
+    $TC class add dev $IF_INGRESS parent 1:1 classid 1:10 htb rate $RATE ceil $CEIL
+
+    # filter ingress packet to ingress interface
+    $TC filter add dev $IF parent ffff: protocol all u32 match u32 0 0 action mirred egress redirect dev $IF_INGRESS
+
+    # filter packets marked with handle <x> and send to classid
+    $TC filter add dev $IF_INGRESS parent 1:0 prio 1 handle 4 fw classid 1:10
+
+    # limit incoming traffic to and from port 7075 but not when its to a half-pr, mark traffic with handle <x>
+    $IPTABLES -t mangle -A INPUT -p tcp --dport $PORT -m set ! --match-set half-prs src -j MARK --set-mark 4
+    $IPTABLES -t mangle -A INPUT -p tcp --sport $PORT -m set ! --match-set half-prs src -j MARK --set-mark 4
+}
+
+function shape_egress {
+    # create root qdisc for egress
+    $TC qdisc add dev $IF root handle 1:0 htb
+
+    # create parent class for egress
+    $TC class add dev $IF parent 1: classid 1:1 htb rate $RATE ceil $CEIL
+
+    # create class to rate limit non half PR egress traffic
+    $TC class add dev $IF parent 1:1 classid 1:10 htb rate $RATE ceil $CEIL
+
+    # filter packets marked with handle <x> and send to classid
+    $TC filter add dev $IF parent 1:0 prio 1 handle 2 fw classid 1:10
+
+    # limit outgoing traffic to and from port 7075 but not when its to a half-pr, mark traffic with handle <x>
+    $IPTABLES -t mangle -A OUTPUT -p tcp --sport $PORT -m set ! --match-set half-prs dst -j MARK --set-mark 2
+    $IPTABLES -t mangle -A OUTPUT -p tcp --dport $PORT -m set ! --match-set half-prs dst -j MARK --set-mark 2
+}
+
+function shape {
+    install
+
+    clear_tc
+    clear_iptables
+
+    shape_ingress
+    shape_egress
 
     # create iptables mangle table
     # $IPTABLES -t mangle -N shaper-in
@@ -87,48 +147,29 @@ function shape {
     # $IPTABLES -t mangle -A shaper-in -p tcp --dport $PORT -m set ! --match-set half-prs src -j MARK --set-mark 2
     # $IPTABLES -t mangle -A shaper-out -p tcp --dport $PORT -m set ! --match-set half-prs dst -j MARK --set-mark 2
 
-    $IPTABLES -t mangle -A INPUT -p tcp --dport $PORT -m set ! --match-set half-prs src -j MARK --set-mark 2
-    $IPTABLES -t mangle -A INPUT -p tcp --sport $PORT -m set ! --match-set half-prs src -j MARK --set-mark 2
-    $IPTABLES -t mangle -A OUTPUT -p tcp --sport $PORT -m set ! --match-set half-prs dst -j MARK --set-mark 2
-    $IPTABLES -t mangle -A OUTPUT -p tcp --dport $PORT -m set ! --match-set half-prs dst -j MARK --set-mark 2
 }
 
 function uninstall {
-    # delete class to rate limit non half PR traffic
-    $TC filter del dev $IF parent 1:0 prio 1 handle 2 fw classid 1:10
-    $TC class del dev $IF parent 1:1 classid 1:10 htb rate $RATE ceil $CEIL
-    $TC class del dev $IF parent 1: classid 1:1 htb rate $RATE ceil $CEIL
-
-    # delete root qdisc
-    $TC qdisc del dev $IF root handle 1:0 htb
-
-    # flush iptables mangle table
-    $IPTABLES -F INPUT
-    $IPTABLES -F OUTPUT
-    $IPTABLES -t mangle -F shaper-in
-    $IPTABLES -t mangle -F shaper-out
-    $IPTABLES -t mangle -F PREROUTING
-    $IPTABLES -t mangle -F POSTROUTING
-    $IPTABLES -t mangle -F INPUT
-    $IPTABLES -t mangle -F OUTPUT
+    clear_iptables
+    clear_tc
 
     # destroy ipset
     $IPSET destroy half-prs
 }
 
 case "${1:-x}" in
-    install) install ;;
+    whitelist) whitelist ;;
     update) update ;;
     shape) shape ;;
-    whitelist) whitelist ;;
+    shape_ingress) shape_ingress ;;
+    shape_egress) shape_egress ;;
     uninstall) uninstall ;;
     *)
         echo  >&2 "usage:"
-        echo >&2 "$0 install"
-        echo >&2 "$0 uninstall"
-        echo >&2 "$0 shape"
         echo >&2 "$0 whitelist"
         echo >&2 "$0 update"
+        echo >&2 "$0 shape"
+        echo >&2 "$0 uninstall"
         exit 1
         ;;
 esac
