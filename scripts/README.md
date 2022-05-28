@@ -10,7 +10,7 @@ apt install ipset iptables iproute2
 Download script
 
 ```
-wget https://raw.githubusercontent.com/mistakia/nano-node-setup/main/scripts/traffic-shaper-beta.sh -o traffic-shaper.sh
+wget https://raw.githubusercontent.com/mistakia/nano-node-setup/main/scripts/traffic-shaper-beta.sh -O traffic-shaper.sh
 ```
 
 # Usage
