@@ -4,8 +4,8 @@ DNS_HOSTNAME="representatives.nano.community"
 PORT=7075
 
 # Rate to throttle non half PRs
-RATE=0.5kbps
-CEIL=2kbps
+RATE=40kbps
+CEIL=40kbps
 MAX=1gbps
 
 # Interface to shape
