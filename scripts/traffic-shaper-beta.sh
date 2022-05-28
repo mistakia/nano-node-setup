@@ -1,7 +1,7 @@
 #!/bin/bash
 
-DNS_HOSTNAME="representatives.nano.community"
-PORT=7075
+DNS_HOSTNAME="beta.nano.community"
+PORT=54000
 
 # Bandwidth to allocate to low priority nodes
 RATE=50kbps
