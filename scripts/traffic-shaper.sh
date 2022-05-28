@@ -6,6 +6,7 @@ PORT=7075
 # Rate to throttle non half PRs
 RATE=0.5kbps
 CEIL=2kbps
+MAX=1gbps
 
 # Interface to shape
 IF=eth0
@@ -63,15 +64,16 @@ function install {
 
 function clear_tc {
     # Clear old queuing disciplines (qdisc) on the interfaces
-    $TC qdisc del dev $IF root
-    $TC qdisc del dev $IF ingress
-    $TC qdisc del dev $IF_INGRESS root
+    $TC qdisc del dev $IF root >/dev/null 2>&1
+    $TC qdisc del dev $IF ingress >/dev/null 2>&1
+    $TC qdisc del dev $IF_INGRESS root >/dev/null 2>&1
     # $TC qdisc del dev $IF_INGRESS ingress
 }
 
 function clear_iptables {
     # flush iptables mangle table
     $IPTABLES -F INPUT
+    $IPTABLES -F OUTPUT
     $IPTABLES -t mangle -F shaper-out
     $IPTABLES -t mangle -F shaper-in
     $IPTABLES -t mangle -F PREROUTING
@@ -89,24 +91,24 @@ function shape_ingress {
     # create ingress on external interface
     $TC qdisc add dev $IF handle ffff: ingress
 
+    # filter ingress packet to ingress interface
+    $TC filter add dev $IF parent ffff: protocol ip u32 match u32 0 0 action mirred egress redirect dev $IF_INGRESS
+
     # create root qdisc for ingress on the IFB device
     $TC qdisc add dev $IF_INGRESS root handle 1:0 htb
 
     # create parent class for egress
-    $TC class add dev $IF_INGRESS parent 1: classid 1:1 htb rate $RATE ceil $CEIL
+    $TC class add dev $IF_INGRESS parent 1: classid 1:1 htb rate $MAX
 
     # ceate class to rate limit non half PR ingress traffic
     $TC class add dev $IF_INGRESS parent 1:1 classid 1:10 htb rate $RATE ceil $CEIL
-
-    # filter ingress packet to ingress interface
-    $TC filter add dev $IF parent ffff: protocol all u32 match u32 0 0 action mirred egress redirect dev $IF_INGRESS
 
     # filter packets marked with handle <x> and send to classid
     $TC filter add dev $IF_INGRESS parent 1:0 prio 1 handle 4 fw classid 1:10
 
     # limit incoming traffic to and from port 7075 but not when its to a half-pr, mark traffic with handle <x>
-    $IPTABLES -t mangle -A INPUT -p tcp --dport $PORT -m set ! --match-set half-prs src -j MARK --set-mark 4
-    $IPTABLES -t mangle -A INPUT -p tcp --sport $PORT -m set ! --match-set half-prs src -j MARK --set-mark 4
+    $IPTABLES -t mangle -A INPUT -i $IF_INGRESS -p tcp --dport $PORT -m set ! --match-set half-prs src -j MARK --set-mark 4
+    $IPTABLES -t mangle -A INPUT -i $IF_INGRESS -p tcp --sport $PORT -m set ! --match-set half-prs src -j MARK --set-mark 4
 }
 
 function shape_egress {
@@ -114,7 +116,7 @@ function shape_egress {
     $TC qdisc add dev $IF root handle 1:0 htb
 
     # create parent class for egress
-    $TC class add dev $IF parent 1: classid 1:1 htb rate $RATE ceil $CEIL
+    $TC class add dev $IF parent 1: classid 1:1 htb rate $MAX
 
     # create class to rate limit non half PR egress traffic
     $TC class add dev $IF parent 1:1 classid 1:10 htb rate $RATE ceil $CEIL
