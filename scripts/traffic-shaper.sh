@@ -143,10 +143,8 @@ function tc_egress {
     $TC filter add dev $IF parent 1:0 protocol ip prio 2 u32 match ip sport $PORT 0xffff classid 1:40
 
     # mark high priority traffic in the half-pr ipset with handle 2 for prioritization
-    $IPTABLES -t mangle -A OUTPUT -p tcp --sport $PORT -m set --match-set half-prs src -j MARK --set-mark 2
-    $IPTABLES -t mangle -A OUTPUT -p tcp --sport $PORT -m set --match-set half-prs dst -j MARK --set-mark 2
-    $IPTABLES -t mangle -A OUTPUT -p tcp --dport $PORT -m set --match-set half-prs src -j MARK --set-mark 2
-    $IPTABLES -t mangle -A OUTPUT -p tcp --dport $PORT -m set --match-set half-prs dst -j MARK --set-mark 2
+    $IPTABLES -t mangle -A OUTPUT -p tcp -m set --match-set half-prs src -j MARK --set-mark 2
+    $IPTABLES -t mangle -A OUTPUT -p tcp -m set --match-set half-prs dst -j MARK --set-mark 2
 }
 
 function shape {
