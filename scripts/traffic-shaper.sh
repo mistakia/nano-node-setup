@@ -41,6 +41,7 @@ function update_ipset {
 
 function whitelist {
     create_ipset
+
     clear_iptables
 
     # Allow connections from ipset
@@ -135,22 +136,20 @@ function tc_egress {
     # create class for low priority nano network egress traffic
     $TC class add dev $IF parent 1:1 classid 1:40 htb rate $RATE ceil $CEIL
 
-    # filter packets marked with handle 2 and send to classid 1:20
-    $TC filter add dev $IF parent 1:0 prio 1 handle 2 fw classid 1:20
-
     # filter packets matching nano network port and send to classid 1:20
     $TC filter add dev $IF parent 1:0 protocol ip prio 2 u32 match ip dport $PORT 0xffff classid 1:40
     $TC filter add dev $IF parent 1:0 protocol ip prio 2 u32 match ip sport $PORT 0xffff classid 1:40
 
-    # mark high priority traffic in the half-pr ipset with handle 2 for prioritization
-    $IPTABLES -t mangle -A OUTPUT -p tcp -m set --match-set half-prs dst -j MARK --set-mark 2
+    # filter high priority packets matching dns ips and send to classid 1:30
+    dig "$DNS_HOSTNAME" A +short | while read ip; do
+        $TC filter add dev $IF parent 1:0 protocol ip prio 1 u32 match ip dst $ip classid 1:20
+    done
 }
 
 function shape {
     create_ipset
 
     clear_tc
-    clear_iptables
 
     tc_ingress
     tc_egress
