@@ -44,7 +44,7 @@ To stop traffic shaping and cleanup.
 ./traffic-shaper.sh stop
 ```
 
-> Warning: running `destroy` or `clear_whitelist` will flush your `INPUT` and `OUTPUT` iptables chains. Shouldn't have to run these anyways.
+> Warning: running `destroy` or `clear_whitelist` will flush your `PREROUTING` and `POSTROUTING` iptables chains. Shouldn't have to run these anyways.
 
 # Troubleshooting
 

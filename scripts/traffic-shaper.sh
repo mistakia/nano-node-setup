@@ -29,8 +29,8 @@ TC=/sbin/tc
 $IPTABLES_SAVE > /usr/local/etc/iptables.last
 
 function clear_iptables {
-    $IPTABLES -F INPUT
-    $IPTABLES -F OUTPUT
+    $IPTABLES -F PREROUTING
+    $IPTABLES -F POSTROUTING
 }
 
 function clear_tc {
@@ -64,24 +64,24 @@ function whitelist {
     clear_iptables
 
     # Allow connections from ipset
-    $IPTABLES -I INPUT -p tcp --dport $PORT -m set --match-set half-prs src -j ACCEPT
-    $IPTABLES -I INPUT -p tcp --sport $PORT -m set --match-set half-prs src -j ACCEPT
+    $IPTABLES -I PREROUTING -p tcp --dport $PORT -m set --match-set half-prs src -j ACCEPT
+    $IPTABLES -I PREROUTING -p tcp --sport $PORT -m set --match-set half-prs src -j ACCEPT
 
     # Allow connection to ipset
-    $IPTABLES -I OUTPUT -p tcp --dport $PORT -m set --match-set half-prs dst -j ACCEPT
-    $IPTABLES -I OUTPUT -p tcp --sport $PORT -m set --match-set half-prs dst -j ACCEPT
+    $IPTABLES -I POSTROUTING -p tcp --dport $PORT -m set --match-set half-prs dst -j ACCEPT
+    $IPTABLES -I POSTROUTING -p tcp --sport $PORT -m set --match-set half-prs dst -j ACCEPT
 
     # Deny other incoming connections
-    # $IPTABLES -A INPUT -p tcp --dport $PORT -m limit --limit 10/s -j ACCEPT
-    # $IPTABLES -A INPUT -p tcp --sport $PORT -m limit --limit 10/s -j ACCEPT
-    $IPTABLES -A INPUT -p tcp --dport $PORT -j DROP
-    $IPTABLES -A INPUT -p tcp --sport $PORT -j DROP
+    # $IPTABLES -A PREROUTING -p tcp --dport $PORT -m limit --limit 10/s -j ACCEPT
+    # $IPTABLES -A PREROTUING -p tcp --sport $PORT -m limit --limit 10/s -j ACCEPT
+    $IPTABLES -A PREROUTING -p tcp --dport $PORT -j DROP
+    $IPTABLES -A PREROUTING -p tcp --sport $PORT -j DROP
 
     # Deny other outgoing conenctions
-    # $IPTABLES -A OUTPUT -p tcp --dport $PORT -m limit --limit 10/s -j ACCEPT
-    # $IPTABLES -A OUTPUT -p tcp --sport $PORT -m limit --limit 10/s -j ACCEPT
-    $IPTABLES -A OUTPUT -p tcp --dport $PORT -j DROP
-    $IPTABLES -A OUTPUT -p tcp --sport $PORT -j DROP
+    # $IPTABLES -A POSTROUTING -p tcp --dport $PORT -m limit --limit 10/s -j ACCEPT
+    # $IPTABLES -A POSTROUTING -p tcp --sport $PORT -m limit --limit 10/s -j ACCEPT
+    $IPTABLES -A POSTROUTING -p tcp --dport $PORT -j DROP
+    $IPTABLES -A POSTROUTING -p tcp --sport $PORT -j DROP
 }
 
 function tc_ingress {
