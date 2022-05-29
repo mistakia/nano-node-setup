@@ -7,16 +7,30 @@ apt update
 apt install ipset iptables iproute2
 ```
 
-Download script
+Download beta script
 
 ```
 wget https://raw.githubusercontent.com/mistakia/nano-node-setup/main/scripts/traffic-shaper-beta.sh -O traffic-shaper.sh
+```
+Download mainnet/live script
+
+```
+wget https://raw.githubusercontent.com/mistakia/nano-node-setup/main/scripts/traffic-shaper.sh -O traffic-shaper.sh
 ```
 ```
 chmod +x ./traffic-shaper.sh
 ```
 
+# Config
+
+Edit the `IF` variable in the file to match your network device name.
+```
+IF=eth0
+```
+
 # Usage
+
+> Note: root permissiones are needed, depending on your setup you may need to run with `sudo`
 
 To start traffic shaping.
 
