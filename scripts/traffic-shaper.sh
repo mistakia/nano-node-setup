@@ -133,14 +133,14 @@ function tc_egress {
     # create class for low priority nano network egress traffic
     $TC class add dev $IF parent 1:1 classid 1:40 htb rate $RATE ceil $CEIL
 
-    # filter packets matching nano network port and send to classid 1:20
-    $TC filter add dev $IF parent 1:0 protocol ip prio 2 u32 match ip dport $PORT 0xffff classid 1:40
-    $TC filter add dev $IF parent 1:0 protocol ip prio 2 u32 match ip sport $PORT 0xffff classid 1:40
-
     # filter high priority packets matching dns ips and send to classid 1:30
     dig "$DNS_HOSTNAME" A +short | while read ip; do
         $TC filter add dev $IF parent 1:0 protocol ip prio 1 u32 match ip dst $ip classid 1:20
     done
+
+    # filter packets matching nano network port and send to classid 1:20
+    $TC filter add dev $IF parent 1:0 protocol ip prio 2 u32 match ip dport $PORT 0xffff classid 1:40
+    $TC filter add dev $IF parent 1:0 protocol ip prio 2 u32 match ip sport $PORT 0xffff classid 1:40
 }
 
 function shape {
