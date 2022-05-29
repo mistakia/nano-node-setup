@@ -144,8 +144,6 @@ function tc_egress {
 }
 
 function shape {
-    create_ipset
-
     clear_tc
 
     tc_ingress
