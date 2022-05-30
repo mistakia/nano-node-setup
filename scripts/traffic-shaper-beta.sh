@@ -4,8 +4,8 @@ DNS_HOSTNAME="beta.nano.community"
 PORT=54000
 
 # Bandwidth to allocate to low priority nodes
-LOW_PRIORITY_MIN=50kbps
-LOW_PRIORITY_MAX=50kbps
+LOW_PRIORITY_MIN=1mbps
+LOW_PRIORITY_MAX=1mbps
 
 # Bandwidth to allocate to high priority nodes
 HIGH_PRIORITY_MAX=1gbps
