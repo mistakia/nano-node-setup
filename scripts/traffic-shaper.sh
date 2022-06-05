@@ -1,14 +1,19 @@
 #!/bin/bash
 
-DNS_HOSTNAME="representatives.nano.community"
+DNS_REPS="representatives.nano.community"
+DNS_NODES="nodes.nano.community"
 PORT=7075
 
 # Bandwidth to allocate to low priority nodes
-LOW_PRIORITY_MIN=1mbps
-LOW_PRIORITY_MAX=1mbps
+LOW_PRIORITY_MIN=2mbps
+LOW_PRIORITY_MAX=2mbps
 
-# Bandwidth to allocate to high priority nodes
-HIGH_PRIORITY_MAX=1gbps
+# Bandwidth to allocate to high priority non-voting nodes
+HIGH_PRIORITY_NODES_MIN=10mbps
+HIGH_PRIORITY_NODES_MAX=50mbps
+
+# Bandwidth to allocate to high priority voting nodes
+HIGH_PRIORITY_REPS_MAX=1gbps
 
 # Interface to shape
 IF=eth0
@@ -53,8 +58,14 @@ function update_ipset {
     # Flush old IPs
     $IPSET flush half-prs
 
-    # Get IPs from DNS
-    dig "$DNS_HOSTNAME" A +short | while read ip; do
+    # Get Rep IPs from DNS
+    dig "$DNS_REPS" A +short | while read ip; do
+        # Add ip to ipset
+        $IPSET add half-prs $ip
+    done
+
+    # Get Node IPs from DNS
+    dig "$DNS_NODES" A +short | while read ip; do
         # Add ip to ipset
         $IPSET add half-prs $ip
     done
@@ -102,23 +113,30 @@ function tc_ingress {
     $TC qdisc add dev $IF_INGRESS root handle 1:0 htb default 10
 
     # create parent class for ingress
-    $TC class add dev $IF_INGRESS parent 1: classid 1:1 htb rate $HIGH_PRIORITY_MAX
+    $TC class add dev $IF_INGRESS parent 1: classid 1:1 htb rate $HIGH_PRIORITY_REPS_MAX
 
     # create class for general high priority ingress traffic
-    $TC class add dev $IF_INGRESS parent 1:1 classid 1:10 htb rate $HIGH_PRIORITY_MAX
+    $TC class add dev $IF_INGRESS parent 1:1 classid 1:10 htb rate $HIGH_PRIORITY_REPS_MAX
     # create class for high priority half PR ingress traffic
-    $TC class add dev $IF_INGRESS parent 1:1 classid 1:30 htb rate $HIGH_PRIORITY_MAX
+    $TC class add dev $IF_INGRESS parent 1:1 classid 1:30 htb rate $HIGH_PRIORITY_REPS_MAX
+    # create class for high priority half PR ingress traffic
+    $TC class add dev $IF_INGRESS parent 1:1 classid 1:50 htb rate $HIGH_PRIORITY_NODES_MAX
     # create class for low priority nano network ingress traffic
-    $TC class add dev $IF_INGRESS parent 1:1 classid 1:50 htb rate $LOW_PRIORITY_MIN ceil $LOW_PRIORITY_MAX
+    $TC class add dev $IF_INGRESS parent 1:1 classid 1:70 htb rate $LOW_PRIORITY_MIN ceil $LOW_PRIORITY_MAX
 
-    # filter high priority packets matching dns ips and send to classid 1:30
-    dig "$DNS_HOSTNAME" A +short | while read ip; do
+    # filter high priority packets matching dns rep ips and send to classid 1:30
+    dig "$DNS_REPS" A +short | while read ip; do
         $TC filter add dev $IF_INGRESS parent 1:0 protocol ip prio 1 u32 match ip src $ip classid 1:30
     done
 
-    # filter low priority packets matching nano network port send to classid 1:50
-    $TC filter add dev $IF_INGRESS parent 1:0 protocol ip prio 2 u32 match ip dport $PORT 0xffff classid 1:50
-    $TC filter add dev $IF_INGRESS parent 1:0 protocol ip prio 2 u32 match ip sport $PORT 0xffff classid 1:50
+    # filter high priority packets matching dns node ips and send to classid 1:50
+    dig "$DNS_NODES" A +short | while read ip; do
+        $TC filter add dev $IF_INGRESS parent 1:0 protocol ip prio 1 u32 match ip src $ip classid 1:50
+    done
+
+    # filter low priority packets matching nano network port send to classid 1:70
+    $TC filter add dev $IF_INGRESS parent 1:0 protocol ip prio 2 u32 match ip dport $PORT 0xffff classid 1:70
+    $TC filter add dev $IF_INGRESS parent 1:0 protocol ip prio 2 u32 match ip sport $PORT 0xffff classid 1:70
 }
 
 function tc_egress {
@@ -126,23 +144,30 @@ function tc_egress {
     $TC qdisc add dev $IF root handle 1:0 htb default 10
 
     # create parent class for egress
-    $TC class add dev $IF parent 1: classid 1:1 htb rate $HIGH_PRIORITY_MAX
+    $TC class add dev $IF parent 1: classid 1:1 htb rate $HIGH_PRIORITY_REPS_MAX
 
     # create class for high priority general egress traffic
-    $TC class add dev $IF parent 1:1 classid 1:10 htb rate $HIGH_PRIORITY_MAX
+    $TC class add dev $IF parent 1:1 classid 1:10 htb rate $HIGH_PRIORITY_REPS_MAX
     # create class for high priority half PR egress traffic
-    $TC class add dev $IF parent 1:1 classid 1:20 htb rate $HIGH_PRIORITY_MAX
+    $TC class add dev $IF parent 1:1 classid 1:20 htb rate $HIGH_PRIORITY_REPS_MAX
+    # create class for high priority half PR egress traffic
+    $TC class add dev $IF parent 1:1 classid 1:40 htb rate $HIGH_PRIORITY_NODES_MAX
     # create class for low priority nano network egress traffic
-    $TC class add dev $IF parent 1:1 classid 1:40 htb rate $LOW_PRIORITY_MIN ceil $LOW_PRIORITY_MAX
+    $TC class add dev $IF parent 1:1 classid 1:60 htb rate $LOW_PRIORITY_MIN ceil $LOW_PRIORITY_MAX
 
-    # filter high priority packets matching dns ips and send to classid 1:30
-    dig "$DNS_HOSTNAME" A +short | while read ip; do
+    # filter high priority packets matching dns rep ips and send to classid 1:20
+    dig "$DNS_REPS" A +short | while read ip; do
         $TC filter add dev $IF parent 1:0 protocol ip prio 1 u32 match ip dst $ip classid 1:20
     done
 
-    # filter packets matching nano network port and send to classid 1:20
-    $TC filter add dev $IF parent 1:0 protocol ip prio 2 u32 match ip dport $PORT 0xffff classid 1:40
-    $TC filter add dev $IF parent 1:0 protocol ip prio 2 u32 match ip sport $PORT 0xffff classid 1:40
+    # filter high priority packets matching dns node ips and send to classid 1:40
+    dig "$DNS_NODES" A +short | while read ip; do
+        $TC filter add dev $IF parent 1:0 protocol ip prio 1 u32 match ip dst $ip classid 1:40
+    done
+
+    # filter packets matching nano network port and send to classid 1:60
+    $TC filter add dev $IF parent 1:0 protocol ip prio 2 u32 match ip dport $PORT 0xffff classid 1:60
+    $TC filter add dev $IF parent 1:0 protocol ip prio 2 u32 match ip sport $PORT 0xffff classid 1:60
 }
 
 function shape {
