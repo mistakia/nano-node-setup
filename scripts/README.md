@@ -3,7 +3,7 @@
 This traffic shaper uses DNS records and [TC](https://man7.org/linux/man-pages/man8/tc.8.html) to shape traffic to your node. The traffic shaper will create three classes:
 
 ##### high priorty voting nodes
-- effectively uncapped bandwidth (dedfault 1gbps)
+- effectively uncapped bandwidth (default 1gbps)
 - dns records via `representatives.nano.community`
 - reps with at least half the voting weight of a principal representative (~50k)
 
