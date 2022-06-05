@@ -4,13 +4,13 @@ This traffic shaper uses DNS records and [TC](https://man7.org/linux/man-pages/m
 
 ##### high priorty voting nodes
 - effectively uncapped bandwidth (default 1gbps)
-- dns records via `representatives.nano.community`
-- reps with at least half the voting weight of a principal representative (~50k)
+- IPs found in dns records at `representatives.nano.community`
+- records set to reps with at least half the voting weight of a principal representative (~50k)
 
 ##### high priorty non-voting nodes
 - bandwidth collectively capped (default 50 mbps)
-- dns records via `nodes.nano.community`
-- nodes that have been online for more than ~14 days in the last 90 days
+- IPs found in dns records at `nodes.nano.community`
+- records set to nodes that have been online for more than ~14 days in the last 90 days
 
 ##### low priority nodes
 - bandwidth collectively capped (default 2mbps)
