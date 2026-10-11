@@ -1,3 +1,5 @@
+> **Retired (2026-10).** This traffic shaper is no longer maintained. Nano node V27 and later give each peer equal processing time through built-in fair queuing, which covers what this script was for. The `representatives.nano.community` and `nodes.nano.community` DNS records it reads are being removed. If you still want a representative allowlist, build it from https://nano.community/api/representatives, which lists each online representative's current address, port and weight.
+
 # Description
 
 This traffic shaper uses DNS records and [TC](https://man7.org/linux/man-pages/man8/tc.8.html) to shape traffic to your node. The traffic shaper will create three classes:
